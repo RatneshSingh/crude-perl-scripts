@@ -42,7 +42,7 @@ my $usage="$0 -s sequencefile -db database  [options]
     11 = BLAST archive format (ASN.1)
     12 = JSON Seqalign output
 -f directoryToSaveResults[blastn.tmp]
--a ExtraArgumentforBlastn. Dont put hyphens.eg. -a 'evalue 1e-10' -a 'culling_limit 1' etc..
+-a ExtraArgumentforBlastn. Dont put hyphens before flag.eg. -a 'evalue 1e-10' -a 'culling_limit 1' etc..
 -r do not remove temp folder
 ";
 die "$usage" if $help;
@@ -119,6 +119,7 @@ open(OUT,">>$out") or die "Cannot open outfile $out";
 for my$filenum(0..$numcpu) {
  open my $TmpFH,"$dir/$seqfilename.$filenum.out" or die "Can't open \"$dir/$seqfilename.$filenum.out\": $!";
   #print "\nProcessing file num $filenum\n";
+  ## need special way of combining files if output is XML format. 
  if ($outfmt == 5) {
 	while (<$TmpFH>){
 	  if ($filenum == 0) {
@@ -155,7 +156,7 @@ for my$filenum(0..$numcpu) {
 }
 
 print "\nremoving temp folder\n" if !$rem;
-system("rm -r $dir") if!$rem;
+system("rm -r $dir") if !$rem;
 print "Blast run finished\nResults are saved in file:\n$out\n\n";
 
 
