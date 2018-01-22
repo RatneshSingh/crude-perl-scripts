@@ -1,3 +1,10 @@
+#### this script helps to spped up locally installed blast. 
+#### It divides the query file in number of user defined parts and 
+#### run each blast on each fragment in parralel. At the end it combines the results as one output file.
+#### Eventhough blast has num_threads option to allow blast to use multiple cpu, it is still comparatively slow
+#### Using this script to run blast will result in significant decrease in time to get the results. 
+#### Using number of CPU more than what your system has will slow down the process and is not recommended..
+
 use warnings;
 use strict;
 use Getopt::Long;
@@ -44,7 +51,8 @@ my $usage="$0 -s sequencefile -db database  [options]
     11 = BLAST archive format (ASN.1)
     12 = JSON Seqalign output
 -f directoryToSaveResults[blastn.tmp]
--a ExtraArgumentforBlastn. Dont put hyphens.eg. -a 'evalue 1e-10' -a 'culling_limit 1' etc..
+-a Additional Arguments for Blast. use it multiple times if needed. 
+   Dont put hyphens before flag.eg. -a 'evalue 1e-10' -a 'culling_limit 1' etc..
 -r do not remove temp folder
 ";
 die "$usage" if $help;
@@ -112,7 +120,11 @@ undef %$seqhash;
 my@cmds;
 my@PIDs;
 for (0..$numcpu) {
+<<<<<<< HEAD
   $cmds[$_]="nice $prg  -query $dir/$seqfilename.$_  -db $database   -out $dir/$seqfilename.$_.out -outfmt \"$outfmt\" -num_threads $numcpu  $args > $dir/blastn.$_.log 2>&1";
+=======
+  $cmds[$_]="$prg  -query $dir/$seqfilename.$_  -db $database -num_threads $numcpu  -out $dir/$seqfilename.$_.out -outfmt \"$outfmt\"   $args > $dir/blastn.$_.log 2>&1";
+>>>>>>> e308eff359c6bb3ab8529102b054089d84113d48
   #$cmds[$_]="ls" ### for testing script witjout running blast everytime.
   ## extra options sometimes useful.
   ##-culling_limit 1 -num_threads 30 -evalue 1e-10 -outfmt '6 std qcovhsp qcovs qlen slen sscinames scomnames stitle'
@@ -145,6 +157,7 @@ open(OUT,">>$out") or die "Cannot open outfile $out";
 for my$filenum(0..$numcpu) {
  open my $TmpFH,"$dir/$seqfilename.$filenum.out" or die "Can't open \"$dir/$seqfilename.$filenum.out\": $!";
   #print "\nProcessing file num $filenum\n";
+  ## need special way of combining files if output is XML format. 
  if ($outfmt == 5) {
 	while (<$TmpFH>){
 	  if ($filenum == 0) {
@@ -181,8 +194,12 @@ for my$filenum(0..$numcpu) {
 }
 
 print "\nremoving temp folder\n" if !$rem;
+<<<<<<< HEAD
 sleep(5);
 system("rm -r $dir") if!$rem;
+=======
+system("rm -r $dir") if !$rem;
+>>>>>>> e308eff359c6bb3ab8529102b054089d84113d48
 print "Blast run finished\nResults are saved in file:\n$out\n\n";
 
 

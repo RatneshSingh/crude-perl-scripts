@@ -76,6 +76,7 @@ while(<FASTA>){
 
 open("CMD",">genscan.cmd");
 foreach my$seqname(keys %seq){
+<<<<<<< HEAD
 	my $seq_file=$seqname;
 		$seq_file=~s/\s+\S+$//g;
 	if ($CPU > 1) {
@@ -84,6 +85,14 @@ foreach my$seqname(keys %seq){
 		print CMD join " ",@command," > genscan_$seq_file 2> genscan_$seq_file.log","\n";
 	}else{
 		print "Running Genscan for: $seq_file\n";
+=======
+	if ($CPU > 1) {
+    	open(TMP,">SeqGenscan.tmp.$seqname"); print TMP ">$seqname\n$seq{$seqname}\n"; close(TMP);
+		my @command=("genscan","$location","SeqGenscan.tmp.$seqname","$opt_c");
+		print CMD join " ",@command," > genscan_$seqname 2> genscan_$seqname.log","\n";
+	}else{
+		print "Running Genscan for: $seqname\n";
+>>>>>>> e308eff359c6bb3ab8529102b054089d84113d48
 		genscan($seqname,$seq{$seqname},$opt_c);
 	}
 }
@@ -118,7 +127,11 @@ sub split_fasta{
 		my$subseq_len=$end - $start;
 		
 		my$subseq=substr($$refsequence,$i,$subseq_len);
+<<<<<<< HEAD
 		my$new_name=join("",$$refname,"_",$i+1,"-",$end,"   ",length($subseq),"nt");
+=======
+		my$new_name=join("",$$refname,"_",$i+1,"-",$end);
+>>>>>>> e308eff359c6bb3ab8529102b054089d84113d48
 		$$hRef_seq{$new_name}=$subseq;
 	}
 }

@@ -43,28 +43,27 @@ if (lc $opt_f =~ /genscan/i){
     s/^\s+//g;
     #die "No exon or gene found in the file" if /'NO EXONS\/GENES PREDICTED IN SEQUENCE'/;
     if(/^Sequence\s+(\S+)\s*:\s*(\d+)\s*bp/){
-      $sequence_name=$1;$sequence_length=$2;$add_to_coord=0;
+      $sequence_name=$1;$sequence_length=$2;
       ##### find real name and number to add to coord if chunked sequences were used.
       my $real_name=$sequence_name;
       $cor_name{$sequence_name}=$real_name;
       if($opt_s > 0){
-      print "\nThe name of chunked sequence: $sequence_name ";
+      print "\nChanging the name of chunked sequence: $sequence_name to ";
       $sequence_name=~s/^\s+|\s+$//g;
-      if($sequence_name =~ m/^(\S+)_(\d+)-(\d+)$/) {
+      if($sequence_name =~ m/^(\S+)\_(\d+)\-(\d+)$/) {
         $real_name=$1;
         my$tstart=$2;
         my$tend=$3;
         if ($tstart && $tend){
-          $add_to_coord=$tstart -1 ;
-          print " is being changed to "
+          $add_to_coord=$tstart;
           #$real_name=~ s/$tstart\-$tend//g;
         }else{
           print "\nUnable to find Start and end of sequence in Sequence name;$sequence_name";
-          print "\nNothing will be added to coord.";
+          print "\nNoting will be added to coord.";
         }
-    }else{print " is being kept same as "}
+    }
     $cor_name{$sequence_name}=$real_name;
-    print "$real_name.**** Add to coord is $add_to_coord\n"
+    print "$real_name\n"
   }  
 }    # print "\n*-->Processing Sequence $sequence_name";
 
@@ -165,7 +164,7 @@ next if /^\s*$|^#|^FGENESH|^Time|^Number|^Positions|^G\s+Str/;  # add '|\s+TSS\s
 last if /^Predicted protein/;
 #die "No exon or gene found in the file" if /'NO EXONS\/GENES PREDICTED IN SEQUENCE'/;
 if(/^Seq\s+name\:\s*(\S+)\s*/){
- $sequence_name=$1;$add_to_coord=0;
+ $sequence_name=$1;
   ##### find real name and number to add to coord if chunked sequences were used.
   my $real_name=$sequence_name;
   $cor_name{$sequence_name}=$real_name;
@@ -176,7 +175,7 @@ if(/^Seq\s+name\:\s*(\S+)\s*/){
         my$tstart=$2;
         my$tend=$3;
         if ($tstart && $tend){
-          $add_to_coord=$tstart -1 ;
+          $add_to_coord=$tstart;
           #$real_name=~ s/$tstart\-$tend//g;
         }else{
           print "\nUnable to find Start and end of sequence in Sequence name;$sequence_name";
