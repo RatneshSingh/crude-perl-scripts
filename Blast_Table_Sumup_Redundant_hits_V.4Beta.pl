@@ -2,7 +2,7 @@
 use warnings;
 use strict;
 use Getopt::Long;
-
+no autovivification;
 #####################################################################################################
 # This script is made to remove overlapping regions in hits and find unique coordinates to          #
 # identify hit region. Also pulls out the hit region or whole sequence fro subject to align later   #
@@ -506,6 +506,8 @@ my $count = 0;
 my %vectrim;
 my %done;
 foreach my $subject ( keys %blast ) {
+    
+   
     foreach my $hit ( keys %{ $blast{$subject} } ) {
 
         # print table
@@ -551,11 +553,14 @@ foreach my $subject ( keys %blast ) {
 
         if ($opt_s) {
             my ($head,$seq);
-
+            if (! exists $$hRef_genomic_seq{$subject}) {
+                print "No sequence were found with name: $subject ..... Skipping\n";
+                next;
+            }
             # collecting information for vector trim
             push( @{ $vectrim{$subject}{'coords'} }, $blast{$subject}{$hit}{'old_sstart'}, $blast{$subject}{$hit}{'old_send'} );
             my($substr_start_site,$substr_length_extract);
-            # calculations for extract sequences
+            # calculations for extracting sequences
             if ( $blast{$subject}{$hit}{'strand'} eq 'plus' ) {
 
                 $substr_start_site     = ( $blast{$subject}{$hit}{'old_sstart'} - 1 - $opt_h );

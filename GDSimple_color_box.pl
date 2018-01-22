@@ -35,3 +35,4 @@ open OUT, ">GD_Simple_Color_pallete.png" or die "\nUnable to Open outfile\n";
 binmode OUT;
 print OUT $img->png;
 close OUT;
+print "\nColor pallete is saved as GD_Simple_Color_pallete.png\n";

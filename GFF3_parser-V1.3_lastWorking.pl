@@ -23,14 +23,13 @@ Options:
 		'exon':extract and join the exon sequences based on the coords defined in gff file.
 		'CDS': extract the CDS sequences based on the coords defined in gff file.
 		'genbank':Save sequences and features as genbank file for each gene in the list [Not implemented Yet].
-		'promoter': Extract promoter region of the genes in the list. The length will be specified by -us (upstream) or -ds (downstream) or both.
+		'promoter': Extract promoter region of the genes in the list. The length will be specified by -u (upstream) or -d (downstream) or both.
 		'extract_repeats': Extract repeat regions from genomic sequences using gff file from RepeatMasker.
 		'mask_repeats': Mask repeat region on the genomic sequences using gff file from RepeatMasker.
 		'gc_around_repeats': Calcuate GC content around repeat regions on genomic sequences using gff file from RepeatMasker.
--window  percent of CDS length to be used as sliding window for intron-exon-gc [10]
--slide   percent of CDS length to be used as step size for sliding window in intron-exon-gc [5]
+
 -out|o		prefix for the output file name. Please dont add extension.
--minlen minimum length of the feature to be used. Discard features smaller than this value[100]
+
 Incase the gene name is short and genomic name is long. Define here
 the delimiter to split and which column to use for matching
 
@@ -46,7 +45,6 @@ the delimiter to split and which column to use for matching
 			'speed': for speed. slurps all the lines in GFF file (fast but consumes memory).
 -rep_group	table of repeat name(col 1) and group(col2) they belong, to classify names into order/family.
 -h			print help
--v          verbose.
 ";
 
 
@@ -54,7 +52,7 @@ the delimiter to split and which column to use for matching
 # option processing
 our($opt_seqfile,$opt_GFF_file,$opt_gene_list_file,$opt_feature_type,$opt_out_file,$opt_delimiter,$opt_column,$opt_upstream,
 	$opt_downstream,$opt_run_modein_len_for_GC,$opt_feature_name,$opt_run_mode,$opt_min_rep_len,$opt_repeat_group_list,$help,
-	$print_raw,$slide,$window,$verbose,$len_lim); ### percent of length;);
+	$print_raw);
 my(@pattern,%Gene);
 #$opt_GFF_file='Lotus_Genes_short_names.gff' ;
 #$opt_gene_list_file='Nn_MADS_39gene.list';
@@ -67,8 +65,6 @@ $opt_downstream=1000;
 $opt_run_modein_len_for_GC=100;
 $opt_run_mode='memory';
 $opt_min_rep_len=10;
-$slide=5; ### percent of length for step size in intron-exon-gc sliding window
-$window=10; ### percent of length for window size in intron-exon-gc sliding window
 
 my$result=GetOptions(
 						"sequence|seq|s=s" => \$opt_seqfile,
@@ -76,8 +72,6 @@ my$result=GetOptions(
 						"list|l=s" => \$opt_gene_list_file,
 						"feature|f=s" => \$opt_feature_type,
 						"out|o=s" => \$opt_out_file,
-						"slide|bin=f"=>\$slide,
-						"window|w=f"=>\$window,
 						"delim|delimiter|d=s" => \$opt_delimiter,
 						"column|col|c=i" => \$opt_column,
 						"upstream|up|us|u=i" => \$opt_upstream,
@@ -88,9 +82,7 @@ my$result=GetOptions(
 						"min_len_rep|mlr|e=i" => \$opt_min_rep_len,
 						"rep_group=s" => \$opt_repeat_group_list,
 						"print_raw" => \$print_raw,
-						"help|h" => \$help,
-                        "verbose|v"=>\$verbose,
-                        "len_lim|minlen=i"=>\$len_lim,
+						"help|h" => \$help
 );
 
 
@@ -132,8 +124,8 @@ elsif($opt_gene_list_file && lc $opt_gene_list_file eq 'manual'){
 
 # Create list from the name of the sequence file
 elsif ( !$opt_gene_list_file ) {
-	print "\nList file is not provided. Printing all the genes in gff file.\n";
-    #@pattern=keys %{$genome_seq};
+	print "\nList file is not provided. Creating list from sequence file.\n";
+    @pattern=keys %{$genome_seq};
 
 }
 ##################################################################
@@ -150,44 +142,16 @@ if($opt_run_mode eq 'memory'){
 		 print "Read co-ordinates for $gene_name from gff file($num_done out of $num_pattern)\n";
 	}
 }
-else{
-    print "\nReading all the elements in GFF file in memory....Please wait";
-    get_gene_info($opt_GFF_file,'no need of any name',$opt_run_mode);
-    @pattern = keys %Gene ; #if ( !$opt_gene_list_file );
-    print ".........Done\n"}
+else{print "\nReading all the elements in GFF file in memory....Please wait";get_gene_info($opt_GFF_file,'no need of any name',$opt_run_mode);print ".........Done\n"}
 
 ##################################################################
 # Prepare files to save output
 my$fh;
-
-
-if($opt_out_file && (lc$opt_feature_type eq 'gc_around_repeats' || lc$opt_feature_type eq 'intron-exon-gc')){open $fh,">$opt_out_file.$opt_feature_type.table" or die "Cannot open output file for writing\n"; }
+if($opt_out_file && $opt_feature_type eq 'gc_around_repeats'){open $fh,">$opt_out_file.$opt_feature_type.table" or die "Cannot open output file for writing\n"; }
 elsif($opt_out_file){open $fh,">$opt_out_file.$opt_feature_type.fasta" or die "Cannot open output file for writing\n"; }
 else{$fh=*STDOUT;}
 
-## print headers for some output types
-my ($fh_gcperintron,$fh_gcperexon,$fh_lenperintron,$fh_lenperexon,$fh_perlen,$fh_perlensliding);
-if (lc$opt_feature_type eq 'intron-exon-gc'){
-	if (!$opt_out_file) {$opt_out_file=$opt_seqfile;$opt_out_file=~s/\.[^\.]+//;}
-	open $fh_gcperintron,">$opt_out_file.$opt_feature_type.GCperintron.table";
-	open $fh_gcperexon,">$opt_out_file.$opt_feature_type.GCperexon.table";
-	open $fh_lenperintron,">$opt_out_file.$opt_feature_type.Lenperintron.table";
-	open $fh_lenperexon,">$opt_out_file.$opt_feature_type.Lenperexon.table";
-	open $fh_perlen,">$opt_out_file.$opt_feature_type.perlen.table";
-	open $fh_perlensliding, ">$opt_out_file.$opt_feature_type.perlensliding.table";
 
-	print $fh join "\t","GeneName","NumIntrons","gene_length","CDS_length","Intron_length","\%GC_exons","\%GC_introns","GC_each_exons","GC_each_introns","len_each_exon","len_each_intron","GC_per_10percent_of_CDS";
-	print $fh_gcperintron join "\t","GeneName","GC_each_introns";
-	print $fh_gcperexon join "\t","GeneName","GC_each_exons";
-print $fh_lenperintron join "\t","GeneName","Len_each_introns";
-	print $fh_lenperexon join "\t","GeneName","Len_each_exons";
-	print $fh_perlen join "\t","GeneName","0-10%","10-20%","20-30%","30-40%","40-50%","50-60%","60-70%","70-80%","80-90%","90-100%";
-	my@iegc_header;
-	my$count=0;
-	my$frag=int((100-$window)/$slide);
-	for(my$i=0;  $i <= 100-$window;  $i=int($i+$slide)){my$next_i=int($i+$window)<100?int($i+$window):100; push(@iegc_header,"$i-$next_i\%")}
-	print $fh_perlensliding join "\t","GeneName",@iegc_header;
-}
 ##################################################################
 # set default values for pattern based on feature(-f) type, if user did not provide the value for pattern (-p).
 if(lc$opt_feature_type eq 'mask' && !$opt_feature_name){$opt_feature_name='mask'}
@@ -198,16 +162,15 @@ elsif(lc$opt_feature_type eq 'exon' && !$opt_feature_name){$opt_feature_name='ex
 elsif(lc$opt_feature_type eq 'genbank' && !$opt_feature_name){$opt_feature_name='genbank'}
 elsif(lc$opt_feature_type eq 'promoter' && !$opt_feature_name){$opt_feature_name='gene'}
 elsif(lc$opt_feature_type eq 'gc_around_repeats' && !$opt_feature_name){$opt_feature_name='dispersed_repeat'}
-else{$opt_feature_name='CDS'}
 
 ##################################################################
 # Read gff file and retrieve the feature values
 print "\nPerforming requested ($opt_feature_type) action on sequences.....\n";
 my@attributes_gcup_gcdown;
 foreach my$gene_name(@pattern){
-    my ($gene_seq,$coords,$seqlen,$seqid,$array_introns,$array_exons);
+    my ($gene_seq,$coords,$seqlen,$seqid);
 	# to Mask the feature
-    if(lc $opt_feature_type eq 'mask'){
+    if(lc$opt_feature_type eq 'mask'){
 		($gene_seq,$coords,$seqlen,$seqid)=get_seq($gene_name,'mask',$opt_feature_name);
 		print {$fh}">$gene_name Exon masked:$seqid$coords length:$seqlen \n$gene_seq\n" if $gene_seq ne "0";
 	}
@@ -215,100 +178,6 @@ foreach my$gene_name(@pattern){
     elsif(lc$opt_feature_type eq 'gene'||lc$opt_feature_type eq 'mrna'||lc$opt_feature_type eq 'cds'||lc$opt_feature_type eq 'exon'){
 		($gene_seq,$coords,$seqlen,$seqid)=get_seq($gene_name,'extract',$opt_feature_name);
 		print {$fh}">$gene_name $opt_feature_name:$seqid$coords length:$seqlen \n$gene_seq\n" if $gene_seq ne "0";
-
-        #($gene_seq,$coords,$seqlen,$seqid)=get_introns($gene_name,'extract',$opt_feature_name);
-        #print {$fh}">$gene_name Intron:$seqid$coords length:$seqlen \n$gene_seq\n" if $gene_seq ne "0";
-
-	}
-    # to extract the intron and exons information
-    elsif(lc$opt_feature_type eq 'intron-exon-gc'){
-
-
-        my($CDS_Seq,$coords,$CDS_len,$seqid,$array_exons)=get_seq($gene_name,'extract',$opt_feature_name);
-        my$num_exons=$array_exons?scalar@$array_exons:0 if $array_exons;
-        next if length($CDS_Seq) < 100;
-
-		###return ($gene_seq,"NA",0,$seq_id,[])
-        my($intron_seq,$intron_coords,$intron_len,$iseqid,$array_introns)=get_introns($gene_name,'extract',$opt_feature_name);# if $num_exons > 1;
-		my$num_introns=$array_introns?scalar@$array_introns:0; # if $array_introns;
-		$intron_len||=0;
-        if ($array_exons) {
-            next if scalar@$array_exons < 1;
-        ##print as: "GeneName","NumIntrons","gene_length","CDS_length","Intron_length","\%GC_exons","\%GC_introns","GC_each_exons","GC_each_introns","len_each_exon","len_each_intron","GC_per_10percent_of_CDS"
-		### filehandles: $fh_gcperintron,$fh_gcperexon,$fh_lenperintron,$fh_lenperexon,$fh_perlen
-
-            print {$fh} join "\t","\n$gene_name",$num_introns,$CDS_len+$intron_len,$CDS_len,$intron_len,GC_content_percent($CDS_Seq),GC_content_percent($intron_seq) if $CDS_Seq ne "0" ;
-
-			 print {$fh_gcperexon} "\n$gene_name";
-			 print {$fh_gcperintron} "\n$gene_name";
-			 print {$fh_lenperexon} "\n$gene_name";
-			 print {$fh_lenperintron} "\n$gene_name";
-			 print {$fh_perlen} "\n$gene_name";
-			 print {$fh_perlensliding} "\n$gene_name";
-
-
-
-
-
-            print {$fh} "\t";
-            my$GCexoneach;
-            foreach (@$array_exons){print {$fh_gcperexon} "\t",$_?GC_content_percent($_):0}
-			foreach (@$array_exons){print {$fh} $_?GC_content_percent($_):0,","}
-            print {$fh} "\t";
-
-            if (scalar@$array_introns > 0) {
-                foreach (@$array_introns){print {$fh_gcperintron} "\t",$_?GC_content_percent($_):0}
-                foreach (@$array_introns){print {$fh} $_?GC_content_percent($_):0,","}
-
-            }else{
-                print {$fh_gcperintron} "\t0";
-                print {$fh} "0";
-            }
-            print {$fh} "\t";
-
-            foreach (@$array_exons){print {$fh_lenperexon} "\t",$_?length($_):0}
-			foreach (@$array_exons){print {$fh} $_?length($_):0,","}
-            print {$fh} "\t";
-            if (scalar@$array_introns > 0) {
-                foreach (@$array_introns){print {$fh_lenperintron} "\t",$_?length($_):0}
-                foreach (@$array_introns){print {$fh} $_?length($_):0,","}
-            }else{
-                print {$fh_gcperintron} "\t0";
-                print {$fh} "0";
-            }
-            print {$fh} "\t";
-            my$count=0;
-            my$frag=10;
-            for(my$i=0;  $i < $CDS_len;  $i=int($count * ($CDS_len/$frag))){
-
-                my$extend=($count < $frag? int(($count+1) * $CDS_len/$frag) - $i :  $CDS_len-$i );
-                die "Check files as extend value could not be 10 or lower. current extend:$extend\nCount:$count\t:CDSLen:$CDS_len StartCoord:$i" if $extend < 10;
-                print "\nCount:$count\t:CDSLen:$CDS_len StartCoord:$i\tExtend:$extend\tEndCoord:", $i+$extend if $verbose;
-
-                print {$fh_perlen} "\t",GC_content_percent(substr($CDS_Seq,  $i, $extend));
-				print {$fh} GC_content_percent(substr($CDS_Seq,  $i, $extend)),$count<9?",":"";
-                $count++;
-
-            }
-			### perl length sliding window. Calculations adjusts error due to fraction and tries to keep the window size and slide size similar along the length so that the last window does not get too small.
-			$count=0;
-			$frag=int((100-$window)/$slide);
-			my$slide_len=$slide*$CDS_len/100;
-			my$window_len=int($window*$CDS_len/100);
-            for(my$i=0;  $i <= $CDS_len - $window_len;  $i=int($count * $slide_len)){
-
-			my$extend=($count < $frag ? int($count * $slide_len + $window_len + 0.5) - $i  :  $CDS_len-$i );
-                print "\nFrag:$frag\tCount:$count\t:CDSLen:$CDS_len StartCoord:$i\tExtend:$extend\tEndCoord:", $i+$extend if $verbose;
-
-                print {$fh_perlensliding} "\t",GC_content_percent(substr($CDS_Seq,  $i, $extend));
-				print {$fh} GC_content_percent(substr($CDS_Seq,  $i, $extend)),$count<$frag-1?",":"";
-                $count++;
-
-            }
-
-        }
-
-
 	}
 	# to Write the gene bank file for sequence
 	elsif(lc$opt_feature_type eq 'genbank'){die "\nThis method is not implemented yet\n"; $gene_seq=write_genebank_file($gene_name);print {$fh}"$gene_seq\n";}
@@ -316,19 +185,13 @@ foreach my$gene_name(@pattern){
 	# to Extract the promoter sequence. upstream and downstream is with respect to Transcripton start site(gene start).
 	elsif(lc$opt_feature_type eq 'promoter'){
 		($gene_seq,$coords,$seqlen,$seqid)=extract_promoter($gene_name,$opt_upstream,$opt_downstream,$opt_feature_name);
-		print {$fh}">$gene_name Promoter $opt_upstream upstream and $opt_downstream downstream of TSS $seqid$coords length:$seqlen\n$gene_seq\n" if $gene_seq;
+		print {$fh}">$gene_name Promoter $opt_upstream kb upstream and $opt_downstream kb downstream of TSS $seqid$coords length:$seqlen\n$gene_seq\n" if $gene_seq ne "0";
 	}
 	# to Calculate the GC content of sequence upstream and downstream of repeat element. Need to provide GFF3 file produced by repeat masker or any other program.
 	elsif(lc$opt_feature_type eq 'gc_around_repeats'){
 		my$gc_content_around_repeats=GC_around_repeats($gene_name,$opt_upstream,$opt_downstream,$opt_run_modein_len_for_GC,$opt_feature_name,$opt_min_rep_len);
 		push (@attributes_gcup_gcdown,@{$gc_content_around_repeats}) if $gc_content_around_repeats !~ /^\s*$/;
 	}
-    elsif(lc$opt_feature_type eq 'intron'){
-
-        ($gene_seq,$coords,$seqlen,$seqid)=get_introns($gene_name,'extract',$opt_feature_name);
-        print {$fh}">$gene_name $opt_feature_name:$seqid$coords length:$seqlen \n$gene_seq\n" if $gene_seq ne "0";
-	}
-
 	# or die
 	else{die "Type of function ($opt_feature_type) is not a valid function type.Please choose function type from\ngene\nCDS\nExon\nmRNA\nMask\nGenbank\ngc_around_repeats"}
 
@@ -474,7 +337,6 @@ sub get_gene_info{
     my$gff_file=shift; # Get GFF file name
     my$gene_name=shift; # Get gene name to look for
 	my$speed=shift;
-    print "\nReading GFF file and extracting gene information.....";
     $gene_name=~s/\s+$//; #Remove trailing white spaces
     $gene_name=~s/^\s+//; # Remove heading white spaces
     chomp($gff_file,$gene_name);
@@ -496,8 +358,8 @@ sub get_gene_info{
 		foreach my$line(@selected_gff_lines){
 			$line=~s/^\s+//g;
 			#print "\nThis is from subroutine get_gene_info:$line";
-			my($seqid,$source,$type,$start,$end,$score,$strand,$phase,$attributes,@attributes)=split(/\t/,$line);
-			chomp($seqid,$source,$type,$start,$end,$score,$strand,$phase,$attributes,@attributes);
+			my($seqid,$source,$type,$start,$end,$score,$strand,$phase,@attributes)=split(/\t/,$line);
+			chomp($seqid,$source,$type,$start,$end,$score,$strand,$phase,@attributes);
 			s/^\s*//g foreach($seqid,$source,$type,$start,$end,$score,$strand,$phase);
 			s/\s*$//g foreach($seqid,$source,$type,$start,$end,$score,$strand,$phase);
 			$type=~s/\s+//g;
@@ -505,9 +367,9 @@ sub get_gene_info{
 			push(@{$Gene{$gene_name}{$type}{'line'}},$line);
 
 			$Gene{$gene_name}{$type}{'strand'}=$strand;
-			$Gene{$gene_name}{$type}{'chr'}=$seqid;
+			$Gene{$gene_name}{$type}{'seqid'}=$seqid;
 			$Gene{$gene_name}{$type}{'gene_name'}=$gene_name;
-			$Gene{$gene_name}{$type}{'attributes'}=join(" ",$attributes,@attributes) if ($type eq "mRNA");;
+			$Gene{$gene_name}{$type}{'attributes'}=join(" ",@attributes) if ($type eq "mRNA");;
 
 		}
 
@@ -519,7 +381,6 @@ sub get_gene_info{
   }
   else{
 		my$count;
-        my$geneid;
 		while (<GFF>){
 
 
@@ -529,37 +390,26 @@ sub get_gene_info{
 			s/^\s+//;
 			my$line=$_;
 			#print "\nThis is from subroutine get_gene_info:$line";
-			my($seqid,$source,$type,$start,$end,$score,$strand,$phase,$attributes,@attributes)=split(/\t/,$line);
-			chomp($seqid,$source,$type,$start,$end,$score,$strand,$phase,$attributes,@attributes);
+			my($seqid,$source,$type,$start,$end,$score,$strand,$phase,@attributes)=split(/\t/,$line);
+			chomp($seqid,$source,$type,$start,$end,$score,$strand,$phase,@attributes);
 			s/^\s*//g foreach($seqid,$source,$type,$start,$end,$score,$strand,$phase);
 			s/\s*$//g foreach($seqid,$source,$type,$start,$end,$score,$strand,$phase);
 			$type=~s/\s+//g;
+			push(@{$Gene{$seqid}{$type}{'startend'}},$start,$end);
+			push(@{$Gene{$seqid}{$type}{'line'}},$line);
 
-            $geneid=$1 if $attributes=~/ID=([^;]+)/ ;#&& (lc$type eq 'gene' || lc$type eq 'mrna');
-            $geneid=$1 if $attributes=~/Parent=([^;]+)/ ;#&& (lc$type eq 'gene' || lc$type eq 'mrna');
-            $geneid=~s/^\s*|\s*$//g;
-            my@parents=split /,/,$geneid;
-            foreach my$par(@parents){
-    			push(@{$Gene{$geneid}{$type}{'startend'}},$start,$end);
-    			push(@{$Gene{$geneid}{$type}{'line'}},$line);
-    			$Gene{$geneid}{$type}{'strand'}=$strand;
-    			$Gene{$geneid}{$type}{'chr'}=$seqid;
-    			$Gene{$geneid}{$type}{'gene_name'}=$geneid;
-    			$Gene{$geneid}{$type}{'attributes'}=join(" ",$attributes,@attributes) if ($type eq "mRNA");;
-            }
+
+			$Gene{$seqid}{$type}{'strand'}=$strand;
+			$Gene{$seqid}{$type}{'seqid'}=$seqid;
+			$Gene{$seqid}{$type}{'gene_name'}=$gene_name;
+			$Gene{$seqid}{$type}{'attributes'}=join(" ",@attributes) if ($type eq "mRNA");;
 			$count++;
 		}
 
-		#sort values in each array and remove elements smaller than defined length if asked..
+		#sort values in each array.
 		foreach my$seqid(keys %Gene){
 			@{$Gene{$seqid}{$_}{'startend'}}= sort { $a <=> $b } @{$Gene{$seqid}{$_}{'startend'}} for keys %{$Gene{$seqid}};
 			# %Gene is a global variable so no need to use return()
-            if ($len_lim) {
-                foreach my$typ(keys %{$Gene{$seqid}}){
-                    my$feature_len=${$Gene{$seqid}{$typ}{'startend'}}[-1] - ${$Gene{$seqid}{$typ}{'startend'}}[0] + 1;
-                    delete $Gene{$seqid}{$typ} if ($feature_len < $len_lim);
-                }
-            }
 		}
 		print "\nRead coordinates of  $count elements from GFF file\n";
 
@@ -583,10 +433,9 @@ sub get_seq{
 
 		# get gene info from %Gene (passed as reference) from global variable
         my$gene_seq=();
-        my@exons;
         my$gene_start=${$Gene{$gene_name}{$feature}{'startend'}}[0];
         my$gene_end=${$Gene{$gene_name}{$feature}{'startend'}}[-1];
-        my$seq_id=$Gene{$gene_name}{$feature}{'chr'};
+        my$seq_id=$Gene{$gene_name}{$feature}{'seqid'};
         my$gene_strand=$Gene{$gene_name}{$feature}{'strand'};
         my$CDS_coord='(';
 
@@ -598,15 +447,14 @@ sub get_seq{
             print "This gene region is being masked in $seq_id\n" if $do_what eq 'mask' ;
             for(my$i=0;$i<scalar@{$Gene{$gene_name}{$feature}{'startend'}} - 1; $i=$i+2){
 
-				my $new_substring=();
+				my$new_substring=();
 				my$length=${$Gene{$gene_name}{$feature}{'startend'}}[$i+1] - ${$Gene{$gene_name}{$feature}{'startend'}}[$i] + 1;
-				if($do_what eq 'mask'){$new_substring=substr($$genome_seq{$seq_id}, ${$Gene{$gene_name}{$feature}{'startend'}}[$i] - 1, $length,"N"x$length);$gene_seq .=$new_substring}
-				else{$new_substring=substr($$genome_seq{$seq_id},${$Gene{$gene_name}{$feature}{'startend'}}[$i] - 1, $length );$gene_seq .=$new_substring}
+				if($do_what eq 'mask'){$gene_seq .=substr($$genome_seq{$seq_id}, ${$Gene{$gene_name}{$feature}{'startend'}}[$i] - 1, $length,"N"x$length);}
+				else{$gene_seq .=substr($$genome_seq{$seq_id},${$Gene{$gene_name}{$feature}{'startend'}}[$i] - 1, $length );}
 				$CDS_coord.=${$Gene{$gene_name}{$feature}{'startend'}}[$i].'..'.${$Gene{$gene_name}{$feature}{'startend'}}[$i+1].',';
-                push(@exons,$new_substring);
             }
     }
-        else{print "For gene $gene_name on Sequence with name $seq_id does not exists in the genomic file\n"; return 0;}
+        else{print "Sequence with name $seq_id does not exists in the genomic file\n"; return 0;}
 
         $CDS_coord.=')';
         $CDS_coord=~s/,\)/\)/; # remove last comma
@@ -623,7 +471,7 @@ sub get_seq{
         #my$gene_seq=substr($$genome_seq{$seq_id},$gene_start-1,$gene_end-$gene_start);
         $gene_seq=revcomp($gene_seq) if  $gene_strand eq "-";
 
-        return ($gene_seq,$CDS_coord,$gene_length,$seq_id,\@exons);
+        return ($gene_seq,$CDS_coord,$gene_length,$seq_id);
 
 
 }
@@ -638,13 +486,12 @@ sub extract_promoter{
 	my$upstream=shift;
 	my$downstream = shift;
     my$feature=shift;
-    ### next if promoter is asked for non-gene or non-mRNA region.
-    return undef if (!$Gene{$gene_name}{'gene'}{'startend'} && !$Gene{$gene_name}{'gene'}{'startend'});
+
     # get gene info from %Gene (passed as reference) from global variable
     my$gene_seq=();
     my$gene_start=${$Gene{$gene_name}{$feature}{'startend'}}[0];
     my$gene_end=${$Gene{$gene_name}{$feature}{'startend'}}[-1];
-    my$seq_id=$Gene{$gene_name}{$feature}{'chr'};
+    my$seq_id=$Gene{$gene_name}{$feature}{'seqid'};
     my$gene_strand=$Gene{$gene_name}{$feature}{'strand'};
     my$seq_length=length($$genome_seq{$seq_id});
     my$CDS_coord='(';
@@ -655,7 +502,7 @@ sub extract_promoter{
     # Calculate co-ordinates of sequence to be extracted upstream and downstream of TSS
     if($gene_strand eq '-' || lc$gene_strand eq 'minus' ){
 
-	$promoter_end=$gene_end+$upstream; # $Gene{$gene_name}{$feature}{'startend'} is sorted so $gene_end is actually gene start for minus strand.
+	$promoter_end=$gene_end+$upstream; # $Gene{$gene_name}{$feature}{'startend'} is sorted so $gene_end is actually gene start.
 	$promoter_end=$seq_length if $promoter_end > $seq_length;
 
 	$promoter_start=$gene_end-$downstream;
@@ -671,7 +518,7 @@ sub extract_promoter{
 	$promoter_start=1 if $promoter_start <= 0;
 
 	$promoter_end=$gene_start+$downstream;
-	$promoter_end=$seq_length if $promoter_end>$seq_length;
+	$promoter_end=$seq_length if $promoter_start>$seq_length;
 
 	$extraction_length=$promoter_end-$promoter_start+1;
 
@@ -687,7 +534,6 @@ sub extract_promoter{
 
     my$promoter_length=length$gene_seq;
 
-    print "Extracting promoter from $seq_id for gene name:$gene_name\tfor feature:$feature\tPromot_start:$promoter_start \tPromo_end:$promoter_end\tExtracted_length:$promoter_length\n" if $verbose;
 
     return ($gene_seq,$CDS_coord,$promoter_length,$seq_id);
 
@@ -1067,62 +913,9 @@ sub extract_element{ # to extract downstream of a feature. need start , end, dow
 ##############################################################################################
 # extract introns on if CDS coordinates are provided.
 ##############################################################################################
-sub get_introns{
-
-    my$gene_name=shift;
-	my$do_what=shift; # either 'mask' or 'extract'
-	my$feature=shift; # feature name
-
-	chomp($gene_name,$do_what,$feature);
-
-
-		# get gene info from %Gene (passed as reference) from global variable
-        my$gene_seq="";
-        my@introns;
-        my $gene_start=${$Gene{$gene_name}{$feature}{'startend'}}[0];
-        my$gene_end=${$Gene{$gene_name}{$feature}{'startend'}}[-1];
-        my$seq_id=$Gene{$gene_name}{$feature}{'chr'};
-        my$gene_strand=$Gene{$gene_name}{$feature}{'strand'};
-        my$CDS_coord='(';
-
-	if(!$gene_start || $gene_start<=0){return ($gene_seq,"NA",0,$seq_id,[]);} # return zero if start position of the feature is not found.
-
-
-	if(exists $$genome_seq{$seq_id}){
-            #if($do_what2 eq 'mask'){
-            print "This gene region is being masked in $seq_id\n" if $do_what eq 'mask' ;
-            for(my$i=1;$i<scalar@{$Gene{$gene_name}{$feature}{'startend'}} - 1; $i=$i+2){
-
-				my $new_substring=();
-				my$length=${$Gene{$gene_name}{$feature}{'startend'}}[$i+1] - ${$Gene{$gene_name}{$feature}{'startend'}}[$i] + 1;
-				if($do_what eq 'mask'){$new_substring=substr($$genome_seq{$seq_id}, ${$Gene{$gene_name}{$feature}{'startend'}}[$i] - 1, $length,"N"x$length);$gene_seq .=$new_substring}
-				else{$new_substring=substr($$genome_seq{$seq_id},${$Gene{$gene_name}{$feature}{'startend'}}[$i] - 1, $length );$gene_seq .=$new_substring}
-				$CDS_coord.=${$Gene{$gene_name}{$feature}{'startend'}}[$i].'..'.${$Gene{$gene_name}{$feature}{'startend'}}[$i+1].',';
-                push(@introns,$new_substring);
-            }
-    }
-        else{print "For gene $gene_name on Sequence with name $seq_id does not exists in the genomic file\n"; return 0;}
-
-        $CDS_coord.=')';
-        $CDS_coord=~s/,\)/\)/; # remove last comma
-
-        my$gene_length=length$gene_seq;
-        return ($gene_seq,"NA",0,$seq_id,[]) if !$gene_seq;
-
-        #print "Seq id:$seq_id\n";
-        #print "Exon Start:$gene_start\n";
-        #print "Exon end:$gene_end\n";
-        #print "Exon strand:$gene_strand\n";
-        #print "Exon Length:$gene_length\n";
-        #print "Exon Coordinates:$CDS_coord\n";
-        #my$gene_seq=substr($$genome_seq{$seq_id},$gene_start-1,$gene_end-$gene_start);
-        $gene_seq=revcomp($gene_seq) if  $gene_strand eq "-";
-
-        return ($gene_seq,$CDS_coord,$gene_length,$seq_id,\@introns);
-
+sub extract_introns{
 
 }
-
 ##############################################################################################
 # Return summary of GC content around repeats
 ##############################################################################################
@@ -1409,7 +1202,6 @@ sub max{
 ##############################################################################################
 sub GC_content{
 	my$sequence=shift;
-	return 0 if !$sequence;
 	my$GCnumber=$sequence=~tr/GCgc/GCgc/;
 	my$length_seq=$sequence=~tr/ATGCatgc/ATGCatgc/;
 	#print "\nSequence length is 0\nSequence:$sequence\n" if $length_seq==0;
@@ -1423,7 +1215,6 @@ sub GC_content{
 ##############################################################################################
 sub GC_content_percent{
 	my$sequence=shift;
-	return 0 if !$sequence;
 	my$GCnumber=$sequence=~tr/GCgc/GCgc/;
 	my$length_seq=$sequence=~tr/ATGCatgc/ATGCatgc/;
 

@@ -4,8 +4,9 @@ use strict;
 use Getopt::Long;
 
 #####################################################################################################
-# This script is made to remove overlapping regions in hits and find unique coordinates to cover    #
-#                                                                                                   #
+# This script is made to remove overlapping regions in hits and find unique coordinates to          #
+# identify hit region. Also pulls out the hit region or whole sequence fro subject to align later   #
+#
 # Author : Ratnesh Singh                                                                            #
 # version 1.2                                                                                       #
 # contact for bugs: ratnesh@hawaii.edu                                                              #
@@ -13,7 +14,7 @@ use Getopt::Long;
 #####################################################################################################
 
 our ( $opt_b, $opt_o, $opt_s, $help, $opt_pd, $opt_pc, $opt_v, $opt_and, $opt_or, $opt_e, $opt_l, $opt_p, $opt_qm, $opt_qx, $opt_sm, $opt_sx, $opt_final_qcoverage_max,
-    $opt_final_qcoverage_min, $opt_final_length, $vectrim,$Query_New );
+    $opt_final_qcoverage_min, $opt_final_length, $vectrim,$Query_New,$opt_nofilter,$manual_col,$opt_col_qc,$opt_col_sc,$opt_col_ql,$opt_col_sl);
 
 #$opt_b="ALL_MADS-Box.SRF-TF.50OrMore_tblastn_MADSmaskedLotusGenome.tblastn.1e-5.table";
 #my $opt_v                   = "No";
@@ -70,8 +71,16 @@ my $result = GetOptions(
     "o"                     => \$opt_o,
     "and"                   => \$opt_and,
     "or"                    => \$opt_or,
+    "no_filter|nf"          =>\$opt_nofilter,
+    "col_qc|cqc=i"          =>\$opt_col_qc,
+    "col_sc|csc=i"          =>\$opt_col_sc,
+    "col_ql|cql=i"          =>\$opt_col_ql,
+    "col_sl|csl=i"          =>\$opt_col_sl,
     "help"                  => \$help
 );
+
+$manual_col='TRUE' if ($opt_col_qc||$opt_col_sc||$opt_col_ql||$opt_col_sl);
+
 
 ##################################################
 # set filtering option scope (all or any)
@@ -131,9 +140,13 @@ usage:perl script -options.
     hits occuring less that this distance apart will be considered
     overlapping and will be combined under one large hit [0].
 -s  Sequence file to extract hit regions from.
-
+-col_qc|cqc  column number containing query coverage info[13]
+-col_sc|csc  column number containing subject coverage info[14]
+-col_ql|cql  column number containing query length info[15]
+-col_sl|csl  column number containing subject length info[16]
 Blast filtering options:
 # These filters act on each hit during summarization.
+-nf Do not use any filters.
 -e  E value. Exclude results higher that the evalue [10]
 -l  Aln_length. Exclude results with alignment length smaller than this[1]
 -p  Percent_identity. Exclude results with per id lower than this value[0]
@@ -199,19 +212,37 @@ print STDOUT "Reading blast file....\n";
 while (<BLAST>) {
     my $line = $_;
     chomp($line);
-    if ( $line =~ /^\s+$/ ) { next }
+    if ( $line =~ /^\s*$/ ) { next }
     if ( $line =~ /query/i or /match/i or /score/ or /gap/ or /mismatch/ ) {
         next;
     }
-    my ( $Query, $Subject_New, $Identity, $Aln_length, $Mismatch, $Gap, $Q_start, $Q_end, $New_S_start, $New_S_end, $E_value, $Bit_score, $qcov, $scov, $qlen, $slen ) =
-      split( /\t/, $line );
-    chomp( $Query, $Subject_New, $Identity, $Aln_length, $Mismatch, $Gap, $Q_start, $Q_end, $New_S_start, $New_S_end, $E_value, $Bit_score, $qcov, $scov, $qlen, $slen );
-#########################################################################################################
-    # filter the blast results for query($opt_q) aln_length($opt_l),e-value($opt_e),percent_identity($opt_p)
-    $sequence{$Query}{'len'}       = $qlen;
-    $sequence{$Subject_New}{'len'} = $slen;
 
-    if (
+    my ( $Query, $Subject_New, $Identity, $Aln_length, $Mismatch, $Gap, $Q_start, $Q_end, $New_S_start, $New_S_end, $E_value, $Bit_score,$qcov,$scov,$qlen,$slen,@ext) =
+      split( /\t/, $line );
+
+    if ($manual_col) {
+        my@extinfo=($qcov,$scov,$qlen,$slen,@ext);
+        $qcov=$extinfo[$opt_col_qc - 13] if $opt_col_qc;
+        $scov=$extinfo[$opt_col_sc - 13] if $opt_col_sc;
+        $qlen=$extinfo[$opt_col_ql - 13] if $opt_col_ql;
+        $slen=$extinfo[$opt_col_sl - 13] if $opt_col_sl;
+    }
+ #########################################################################################################
+    # filter the blast results for query($opt_q) aln_length($opt_l),e-value($opt_e),percent_identity($opt_p)
+    #### assign the max(start, end) to length values if table does not contain them
+    $qlen||=max($Q_start, $Q_end);
+    $slen||=max($New_S_start, $New_S_end);
+    ### retain the longest value as query and subject length if not in the table.
+    $sequence{$Query}{'len'}       = $qlen if (!$sequence{$Query}{'len'}||$sequence{$Query}{'len'} < $qlen);
+    $sequence{$Subject_New}{'len'} = $slen if (!$sequence{$Subject_New}{'len'}||$sequence{$Subject_New}{'len'} < $slen);
+
+    $qcov||=$Aln_length*100/$sequence{$Query}{'len'};
+    $scov||=$Aln_length*100/$sequence{$Subject_New}{'len'};
+    chomp( $Query, $Subject_New, $Identity, $Aln_length, $Mismatch, $Gap, $Q_start, $Q_end, $New_S_start, $New_S_end, $E_value, $Bit_score, $qcov, $scov, $qlen, $slen );
+
+#if (!$opt_nofilter) {
+
+    if (!$opt_nofilter &&
         $opt_or    # proceed if hit passed any of the filters
         && !( $Identity >= $opt_p || $Aln_length >= $opt_l || $E_value <= $opt_e || $qcov >= $opt_qm || $qcov <= $opt_qx || $scov <= $opt_sx || $scov >= $opt_sm )
       )
@@ -229,7 +260,7 @@ while (<BLAST>) {
 
         next;
     }
-    elsif (
+    elsif (!$opt_nofilter &&
         $opt_and    # proceed only if hit passed all the filters
         && (   $Identity < $opt_p
             || $Aln_length < $opt_l
@@ -241,7 +272,7 @@ while (<BLAST>) {
       )
     {
 
-        print "\nAllTrue:Skipping this because at least one of these is false
+        print "\nAllTrue:Skipping this because at least one of these is true
     	pid: $Identity < $opt_p
     	aln_len: $Aln_length < $opt_l
     	eval: $E_value > $opt_e
@@ -266,7 +297,7 @@ while (<BLAST>) {
     }
 
     #######################################################################################################
-
+#}
     my $current_start = 0;
     my $current_end   = 0;
     my $Subject       = ();
@@ -430,6 +461,11 @@ foreach my $subject ( keys %blast ) {
                   "Overlap found betwen the $subject hit:$hits[$hit] (start:$blast{$subject}{$hits[$hit]}{'old_sstart'}, End:$blast{$subject}{$hits[$hit]}{'old_send'}) and Hit:$hits[$nexthit](start:$blast{$subject}{$hits[$nexthit]}{'old_sstart'}, End:$blast{$subject}{$hits[$nexthit]}{'old_send'}) \nRessigning new coordinates\n\n"
                   if $opt_v;
 
+                my$old_length=max($blast{$subject}{ $hits[$hit] }{'old_send'},$blast{$subject}{ $hits[$hit] }{'old_sstart'}) - min($blast{$subject}{ $hits[$hit] }{'old_send'},$blast{$subject}{ $hits[$hit] }{'old_sstart'});
+                my$next_old_length=max($blast{$subject}{ $hits[$nexthit] }{'old_send'},$blast{$subject}{ $hits[$nexthit] }{'old_sstart'}) - min($blast{$subject}{ $hits[$nexthit] }{'old_send'},$blast{$subject}{ $hits[$nexthit] }{'old_sstart'});
+
+                my$cur_strand=$old_length > $next_old_length ? $blast{$subject}{ $hits[$hit] }{'strand'} : $blast{$subject}{ $hits[$nexthit] }{'strand'};
+
                 # reassign the start and end of the first hit.
                 $blast{$subject}{ $hits[$hit] }{'old_send'} = max(
                     $blast{$subject}{ $hits[$hit] }{'old_send'},
@@ -443,6 +479,10 @@ foreach my $subject ( keys %blast ) {
                     $blast{$subject}{ $hits[$hit] }{'old_sstart'},
                     $blast{$subject}{ $hits[$nexthit] }{'old_sstart'}
                 );
+
+                $blast{$subject}{ $hits[$hit] }{'strand'}=$cur_strand;
+
+
 
                 # remove $nexthit as it is assimilated in the first hit. Also delete related hash elements
 
@@ -466,7 +506,7 @@ if ($opt_s) { $hRef_genomic_seq = ReadFasta($opt_s) }
 print "Printing uniq hits\n"                                   if !$opt_o;
 print "Extracting hit regions from from genomic sequence\n"    if $opt_s;
 print "Saving hit table to file $opt_b.$opt_k.summary.table\n" if $opt_o;
-print {$fh_tabout} "Subject\tHit\#\tAln_Start\tAln_End\tAln_length\tSeq_length\n";
+print {$fh_tabout} "Subject\tHit\#\tAln_Start\tAln_End\tAln_length\tSeq_length\tStrand\n";
 my $count = 0;
 my %vectrim;
 
@@ -477,7 +517,7 @@ foreach my $subject ( keys %blast ) {
         my $length          = $blast{$subject}{$hit}{'old_send'} - $blast{$subject}{$hit}{'old_sstart'} + 1;
         my $final_qcoverage = $length * 100 / $sequence{$subject}{'len'};
         if (
-            $opt_and
+            !$opt_nofilter && $opt_and
             && (   $length < $opt_final_length
                 || $final_qcoverage < $opt_final_qcoverage_min
                 || $final_qcoverage > $opt_final_qcoverage_max )
@@ -494,7 +534,7 @@ foreach my $subject ( keys %blast ) {
             next;
         }
 
-        elsif ( $opt_or
+        elsif ( !$opt_nofilter && $opt_or
             && !( $length >= $opt_final_length || $final_qcoverage >= $opt_final_qcoverage_min || $final_qcoverage <= $opt_final_qcoverage_max ) )
         {
 
@@ -508,7 +548,7 @@ foreach my $subject ( keys %blast ) {
             next;
         }
 
-        print {$fh_tabout} "$subject\t$hit\t$blast{$subject}{$hit}{'old_sstart'}\t$blast{$subject}{$hit}{'old_send'}\t$length\t$sequence{$subject}{'len'}\n";
+        print {$fh_tabout} "$subject\t$hit\t$blast{$subject}{$hit}{'old_sstart'}\t$blast{$subject}{$hit}{'old_send'}\t$length\t$sequence{$subject}{'len'}\t$blast{$subject}{$hit}{'strand'}\n";
 
         $count++;
 

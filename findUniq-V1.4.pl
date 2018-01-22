@@ -9,15 +9,17 @@ use Getopt::Std;
 #  with XXXX.                                                                                       #
 #                                                                                                   #
 # Author : Ratnesh Singh                                                                            #
-# version 1.4																						#
+# version 1.4		                                                                            #
 # 3/10/2014 added min max subroutines to identify start and end as small and large numbers          #
 # contact for bugs: ratnesh@hawaii.edu                                                              #
+# 06/14/2017 added check for the existsence of multiple sequence with same header in fasta file     #
 #####################################################################################################
 
 
-getopts('s:b:o:rln:x:e:');
-our ($opt_s,$opt_b,$opt_o,$opt_l,$opt_r,$opt_n,$opt_x,$opt_e);
+getopts('s:b:o:rln:x:e:c:');
+our ($opt_s,$opt_b,$opt_o,$opt_l,$opt_r,$opt_n,$opt_x,$opt_e,$opt_c);
 our (%seq);
+$opt_c||=20;
 my($new_header,$new_sequence);
 
 # like the shell getopt, "d:" means d takes an argument
@@ -39,13 +41,15 @@ options:
 -l convert blast hit regions to lower case or soft masked.
 -x replace blasthit regions to this character [default is to change to N]
 -r Run repeat masker to mask repeats.
+-c Num cpu to use for RepeatMasker.
 -n Species name for which repeats to be masked[Viridiplantae]
 -o output file [Default is: output_seq_extract]
 
 ";
 
 
-die "\nThere is no sequence file specified with -s \n $help" if !defined ($opt_s);
+die "\nThere is no sequence file specified with -s \n $help" if !defined ($opt_s) ;
+die "\nThe sequence file $opt_s does not exists. \n $help" if (! -e $opt_s) ;
 print "\nThere is no blast file specified with -b so script will run blastn for $opt_s against itself. \n " if !defined ($opt_b);
 
 
@@ -56,8 +60,8 @@ if($opt_r){
   print "\n Repeatmasker run is requested. Running Repeatmasker with following command.\n";
   $opt_n=$opt_n?$opt_n:"Viridiplantae";
   my$mask_to=$opt_l?'-xsmall':'-x';
-  print "\nRepeatMasker -e ncbi -pa 10  -s -species $opt_n $mask_to $opt_s\n";
-  system("RepeatMasker -e ncbi -pa 10  -s -species $opt_n $mask_to $opt_s");
+  print "\nRepeatMasker -e ncbi -pa $opt_c  -s -species $opt_n $mask_to $opt_s\n";
+  system("RepeatMasker -e ncbi -pa $opt_c  -s -species $opt_n $mask_to $opt_s");
   if(-e "$opt_s.masked"){$opt_s.=".masked";}
 }
 
@@ -88,21 +92,29 @@ if (!defined $opt_b){
 
 print "reading sequence file....Plz wait\n";
 open FASTA,"$opt_s" or die "cannot open Sequence file\n";
-
+my%count;
 $/="\n>";
 while(<FASTA>){
 	chomp;
 
 	my($head,@sequence)=split(/\n/,$_);
 	  my$header=quotemeta($head);
+    $header=$head;  # not using quotemeta
 	  $header=~s/>//;
 	  $header=break_at_space($header);
 
 	my$sequence= join("",@sequence);
 	$sequence=~s/\s+|>//g;
 	$seq{$header}=$sequence;
-
+	$count{$header}+=1;
+	print "\nERROR: Found more than one sequence with same header $header. Masking will not be reliable \n" if $count{$header} > 1;
+	exit if $count{$header} > 1;
 }
+
+
+
+
+
 close (FASTA);
 print".............Done\n";
 $/="\n";
@@ -120,9 +132,11 @@ while(<BLAST>){
 	if ($line=~/^\s*$/){ next ;};
 	if ($line=~/^\#/){ next; } ;
 #	print "line: $line\n";
-	my @line_info= split(/\t/,$line);
-	my$qer=quotemeta($line_info[0]);
-	my$sub=quotemeta($line_info[1]);
+	my @line_info= split(/\s+/,$line);
+	my$qer=quotemeta($line_info[0]); $qer=$line_info[0];  ## not using quotemeta
+	my$sub=quotemeta($line_info[1]); $sub=$line_info[1]; ## not using quotemeta
+
+
 	$line_info[0]=$qer;
 	$line_info[1]=$sub;
 	my$isselfhit=0;
@@ -143,7 +157,8 @@ while(<BLAST>){
 	my $len = $qend - $qstartN;
 	print "Masking --> $query: qstart: $qstart\t qend: $qend \t length : $len \n";
 
-	 ($new_header,$new_sequence)=mask_seq($query,$qstartN,$len);
+	 #($new_header,$new_sequence)=
+	 mask_seq($query,$qstartN,$len);
 	#print OUT">$new_header\n$new_sequence\n" if defined $new_sequence;
 }
 
@@ -153,6 +168,9 @@ foreach (keys %seq){
 
 close(OUT);
 close(BLAST);
+
+
+print "\n\n";
 exit;
 
 
@@ -162,6 +180,14 @@ exit;
 
 sub mask_seq{
 	my($query,$qstartN,$len1)=@_;
+	#my$max_len=length($seq{$query})-$qstartN - 1;
+	#$len1=$len1<$max_len?$len1:$max_len;
+	if (! exists $seq{$query} ) {
+        print "\nUnable to find $query in sequence hash table.";
+		return;
+    }
+
+	print "\n**Masking $query with total length".length($seq{$query})." ans start:$qstartN  extLen:$len1";
 	my $new_sequence1 = substr($seq{$query},$qstartN,$len1);
 
 			  if($opt_l){
@@ -177,7 +203,7 @@ sub mask_seq{
 			  }
 
 			substr($seq{$query},$qstartN,$len1)= $new_sequence1;
-			return ($query,$seq{$query}) if defined $new_sequence1;
+			#return ($query,$seq{$query}) if defined $new_sequence1;
 	}
 #
 #
@@ -189,7 +215,7 @@ sub mask_seq{
 
 sub break_at_space{
   my$string=shift;
-  $string=~s/\s+.*//;
+  $string=~s/\s+.*$//;
 
   return($string);
 }

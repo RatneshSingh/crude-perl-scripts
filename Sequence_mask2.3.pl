@@ -10,7 +10,7 @@ use strict;
 use Getopt::Std;
 
 
-our($opt_s,$opt_b,$opt_o,$opt_m);
+our($opt_s,$opt_b,$opt_o,$opt_m,%seq_hash);
 getopt('sbom');
 
 
@@ -70,7 +70,7 @@ $extra=0;
 if(!$opt_m){$opt_m='q';};
 chomp($opt_m);
 
-%seq=ReadFasta($fastafile);
+ReadFasta($fastafile);
 
 #********************************************************************************************************
 # parse blast tabular output to find out the cordinates to chop the sequence
@@ -197,7 +197,7 @@ sub ReadFasta{ # to read fasta format files into hash. returns hash.
 	chomp $seqfile;
 	open FASTA,"$seqfile";
 	print "reading Sequences from input file.....Plz wait...\n";
-	my%seq_hash=();
+	
 	#$seq_hash{'RS_Concatenated'}="";
 	
 	$/="\n>";    # Change record seperator to read Fasta
@@ -241,7 +241,7 @@ sub ReadFasta{ # to read fasta format files into hash. returns hash.
 	@seq_count=();
 	$/="\n";    # Record seperator set back to default newline.
 
-	return(%seq_hash);
+	#return(%seq_hash);
 
 }
 ##############################################################################################

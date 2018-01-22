@@ -193,7 +193,7 @@ sub N_distribution {
     for ( my $i = 0; $i <= 100; $i++ ) {
         $dist_limits{$i}{'cum_limit'} = int( $total_length * $i / 100 );
 
-        #print "\ndist_limits:$i:$dist_limits{$i}{'cum_limit'}\n";
+        print "\ndist_limits:$i:$dist_limits{$i}{'cum_limit'}\n";
     }
 
     my $cumulative_len = 0;
@@ -201,11 +201,11 @@ sub N_distribution {
 
         $cumulative_len += $seq_len;
 
-        #print "\n cumulative_len:$cumulative_len\n";
+        print "\nAt len $seq_len : cumulative_len:$cumulative_len\n";
         for ( my $i = 100; $i >= 1; $i-- ) {
             $dist_limits{$i}{'N_len'} = $seq_len
               if ( $cumulative_len <= $dist_limits{$i}{'cum_limit'}
-                && $cumulative_len > $dist_limits{ $i - 1 }{'cum_limit'} );
+                && $cumulative_len >= $dist_limits{ $i - 1 }{'cum_limit'} );
         }
 
     }

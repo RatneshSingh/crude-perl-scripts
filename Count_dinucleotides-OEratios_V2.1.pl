@@ -17,7 +17,7 @@ getopt('snlpabwfcov');
 # Write usage rules and options
 my$usage="
 ****************************************************************
-This script calculates the Observed/Expected 
+This script calculates the Observed/Expected
 ratios of all the dinucleotide pair in a given sequence
 
 Optionally this can be used to calculate the OE ratio
@@ -26,18 +26,18 @@ from the given sequence for statistical test purposes
 
 Usage:
 
-=>To calculate OE ratio for individual files 
+=>To calculate OE ratio for individual files
 (multiple sequences in each file will be merged)
 
 	perl\tscript\tfile1\tfile2\tfile.........
 
-  
+
 => to calculate the OE ratio for multiple sequences in a file.
 	*for random option, Multiple sequences in sequence file will be joined into
 	*one large molecule an will be used for selecting random fragments.
 
 	perl script [options...........]
-	
+
 -s	file containing multiple sequences
 -f	indiv.	 Calculate OE ratio for individual sequences in file [default].
 	random.  Calculate OE ratio in randomaly selected sequence fragments for statistical test purposes.
@@ -91,7 +91,7 @@ print "Removing ambigous bases from sequences before OE ratio calculations.\n\n"
 if(defined $opt_o){open $fh,'>',"$opt_o" or die "\n******Error opening output file\n";}
 elsif(lc$opt_f eq 'bin'){
 	my@inputfile=split(/\//,$opt_s);
-	
+
 	my$outputfile="OEratioFor.".$opt_c."basepairs.in.".$inputfile[-1].".bin".$opt_b.".Window".$opt_w.".table";
 	open $fh,'>',$outputfile or die "\n******Error opening output file:$outputfile\n";}
 else{$fh=*STDOUT;}
@@ -108,7 +108,7 @@ for(my$i=0;$i<=scalar@basepairs-1;$i++){$headers.="\t$basepairs[$i]";}
 my $count;
 # for individual sequences in a file or multiple files.
 if(lc$opt_f eq 'indiv'){
-	
+
 	# for individuals files with one sequence in each file provided on command line without any flag
 	if(!defined $opt_s && $ARGV[0]){
 		print {$fh}"$headers\n";
@@ -118,12 +118,12 @@ if(lc$opt_f eq 'indiv'){
 			my$sequence=ReadFasta($file,$ambigous);
 			my$OEratio=count_OE($sequence,$file,\@basepairs);
 			print {$fh}"$OEratio"
-		}	
+		}
 	}
-	
+
 	# When one file with multiple sequence is provided
 	elsif($opt_s){
-		
+
 		my$sequences= ReadFastaTohash($opt_s,$ambigous);
 		print {$fh}"$headers\n";
 		foreach my$file(keys %{$sequences}){
@@ -131,21 +131,21 @@ if(lc$opt_f eq 'indiv'){
 			my$sequence=$$sequences{$file};
 			my$OEratio=count_OE($sequence,$file,\@basepairs);
 			print {$fh}"$OEratio"
-		}	
+		}
 	}
 
-	
+
 
 }
 
-# for randomly selected sequence 
+# for randomly selected sequence
 elsif(lc$opt_f eq 'random'){
-	
+
 	print {$fh}"\t";
 	for(my$i=0;$i<=scalar@basepairs-1;$i++){print "\t$basepairs[$i]";print {$fh}"\t$basepairs[$i]";}
 
 	my$sequence1= ReadFasta($opt_s,$ambigous); # join multiple sequence to one
-		
+
 	for(my$i=1;$i<=$opt_n;$i++){
 		my$length=length($sequence1);
 		my$random=int(rand($length-$opt_l-1));
@@ -154,22 +154,22 @@ elsif(lc$opt_f eq 'random'){
 	}
 
 
-	
+
 }
 elsif(lc$opt_f eq 'bin'){
-		
+
 	die "Cannot find sequence file" if !defined $opt_s;
-	
+
 	#open $fh,">OEratioFor.$opt_c.basepairs.in.$opt_s.bin$opt_b.Window.$opt_w.OEratio.table";
 	print {$fh}"\t";
 	for(my$i=0;$i<=scalar@basepairs-1;$i++){print {$fh}"\tOE ratio for $basepairs[$i] base pair\n";}
-		
+
 	my$sequences= ReadFastaTohash($opt_s,$ambigous);
 	foreach my$file(keys %{$sequences}){
 		my$sequence=$$sequences{$file};
 		count_OE_bin($sequence,$file,$opt_b,$opt_w); # adds values to global hash %OEratio_bin
 	}
-	
+
 	# print OE ratios of all the base pairs for each sequence in a file
 	#-------------------------------------------------------------------------------------
 	# collect position information from
@@ -180,40 +180,40 @@ elsif(lc$opt_f eq 'bin'){
 	foreach my$filename(@filenames){
 		foreach my$base(@basepairs){
 			foreach(keys %{$OEratio_bin{$filename}{$base}}){
-				$position{$_}=0;	
+				$position{$_}=0;
 			}
 		}
 	}
-	
+
 	foreach(keys %position){push(@positions,$_)}
 	@positions= sort { $a <=> $b }@positions;
 	#-------------------------------------------------------------------------------------
-	
-	# print information 
+
+	# print information
 	foreach my$basepair(@basepairs){
-		print {$fh}"Observed/Expected ratio of basepair: $basepair\nBin size:$opt_b\nwindow size:$opt_w\n"; 
+		print {$fh}"Observed/Expected ratio of basepair: $basepair\nBin size:$opt_b\nwindow size:$opt_w\n";
 		foreach my$posit(@positions){my$median_posit=$posit+($opt_b/2);print {$fh}"\t$median_posit";}
 		print {$fh}"\n";
 		foreach my$filename(@filenames){
 			print {$fh}"$filename($basepair)";
 			foreach my$position(keys %{$OEratio_bin{$filename}{$basepair}}){
-				
-				
+
+
 				printf {$fh}"\t%0.4f",$OEratio_bin{$filename}{$basepair}{$position};
-				
+
 			}
 			print {$fh}"\n";
 		}
 		print {$fh}"\n\n\n";
 	}
-	
-	
-	
+
+
+
 }
-else {print "\nPlease use 'True' or 'False' options only for flag '-r'\n or ";}
+else {print "\nPlease use 'True' or 'False' options only for flag '-r'\n ";}
 
 print "\n\n";
-#printf OUT"\n\nFrequency of Bases:\nA\t%.3f\nT\t%.3f\nG\t%.3f\nC\t%.3f",$freq{'A'},$freq{'T'},$freq{'G'},$freq{'C'};	
+#printf OUT"\n\nFrequency of Bases:\nA\t%.3f\nT\t%.3f\nG\t%.3f\nC\t%.3f",$freq{'A'},$freq{'T'},$freq{'G'},$freq{'C'};
 
 
 
@@ -221,12 +221,12 @@ print "\n\n";
 #-------------------------------------Start ReadFasta---------------------------------------+
 
 sub ReadFasta{ # to read fasta format files into hash. joins all the sequences in one file into one sequence and returns hash.
-	
+
 	my $seqfile=shift(@_);
 	my $amb=shift(@_);
 
-	
-	
+
+
 	my ($header,@sequence);
 	my$sequence2=();
 	my$sequence=();
@@ -239,11 +239,11 @@ sub ReadFasta{ # to read fasta format files into hash. joins all the sequences i
 	while(<FASTA>){
 		chomp;
 		($header,@sequence)=split("\n",$_);
-		
+
 		$header=~s/>//;						# Remove Leading > from Header
 		$header=~s/\s*$//;					# Remove trailing spaces from header
 		$header=~s/^\s*//;					# Remove Leading spaces from Header
-		
+
 		$sequence= join("",@sequence);
 		$sequence=~ s/\s//g;
 		$sequence=~s/\n//g;
@@ -251,7 +251,7 @@ sub ReadFasta{ # to read fasta format files into hash. joins all the sequences i
 		if($header=~/^\s*$/){next;}
 			$sequence2.=$sequence;
 	}
-	
+
 	$/="\n";    							# Record seperator set back to default newline.
 	$sequence2=~s/\s+//g;
 	return($sequence2);
@@ -260,7 +260,7 @@ sub ReadFasta{ # to read fasta format files into hash. joins all the sequences i
 #-------------------------------------End ReadFasta---------------------------------------+
 
 sub ReadFastaTohash{
-	
+
 	 my$seqfile=shift(@_);
 	 my $amb=shift(@_);
 
@@ -274,20 +274,20 @@ sub ReadFastaTohash{
 	while(<FASTA>){
     	chomp;
     	($header,@sequence)=split("\n",$_);
-    	
+
     	$header=~s/>//;						# Remove Leading > from Header
     	$header=~s/\s*$//;					# Remove trailing spaces from header
     	$header=~s/^\s*//;					# Remove Leading spaces from Header
-    	
+
     	my$sequence= join("",@sequence);
     	$sequence=~ s/\s//g;
     	$sequence=~s/\n//g;
     	if($amb==1){$sequence=~s/[^ATGC]//gi;}
     	if($header=~/^\s*$/){next;}
     	$seq_hash{$header}=$sequence;     #feed headers and sequences in hash.
-		
+
 	}
-	
+
 	my @seq_count=keys (%seq_hash);
 	my $seq_count=@seq_count;
 
@@ -313,17 +313,17 @@ my$seq_length=length$sequence;
 		$freq{'T'}=base_frequency($sequence,'T');
 		$freq{'C'}=base_frequency($sequence,'C');
 		$freq{'G'}=base_frequency($sequence,'G');
-	
+
 		#printf "\n%s\t%.3f",$file,$GCpcent;
 		#if($opt_p){printf OUT"\n%s\t%.3f",$file,$GCpcent;}
 		#$print_line.="\n$file\t$GCpcent";
-		#Calculate pair frequency of pairs sent as array reference $basepair	
+		#Calculate pair frequency of pairs sent as array reference $basepair
 		for(my$i=0;$i<=scalar@{$basepair}-1;$i++){
 			$pair_count{$$basepair[$i]}{'base_freq'}=sprintf "%.2f", base_frequency($sequence,$$basepair[$i]);
 			#printf "\t%.3f",$pair_count{$$basepair[$i]}{'base_freq'};
 			#if($opt_p){printf OUT"\t%.3f",$pair_count{$$basepair[$i]}{'base_freq'};}
 			#$print_line.="\t$pair_count{$$basepair[$i]}{'base_freq'}";
-			
+
 			#$count=0;
 		}
 
@@ -336,20 +336,20 @@ my$seq_length=length$sequence;
 #			#print "\tpair:$basepairs[$i]";
 			#$count++ while $sequence=~/$basepairs[$i]/gi;
 			(my$b1,my$b2)=split(//,$$basepair[$i]);
-							
+
 			my$baseOEratio=sprintf "%.2f", $pair_count{$$basepair[$i]}{'base_freq'}/($freq{$b1}*$freq{$b2});
 			my$baseOEratio_method2=$pair_count{$$basepair[$i]}{'base_freq'}/((($freq{$b1}+$freq{$b2})/2)^2); # expected frequency is [(G%+C%)/2]to the power2. Based on http://www.jstage.jst.go.jp/article/gi/25/1/53/_pdf
 			#printf"\t%.3f",$baseOEratio;
 			#printf"\t%.3f",$baseOEratio_method2;
 			#printf OUT"\t%.3f",$baseOEratio;
 			$print_line.="\t$baseOEratio";
-		
+
 			$count=0;
 		}
-	
+
 $print_line.="\n";
 return ($print_line);
-}	
+}
 
 
 
@@ -364,14 +364,14 @@ my%pair_count;
 my$print_line;
 my%freq;
 my$seq_length=length$sequence;
-		
+
 	my$GCpcent=GC_content($sequence);
 	$freq{'A'}=base_frequency($sequence,'A');
 	$freq{'T'}=base_frequency($sequence,'T');
 	$freq{'C'}=base_frequency($sequence,'C');
 	$freq{'G'}=base_frequency($sequence,'G');
-	
-	#Calculate frequency	
+
+	#Calculate frequency
 	for(my$i=0;$i<=scalar@basepairs-1;$i++){
 		for(my$j=0;$j<$seq_length;$j+=$opt_w){
 			my$sub_length=$opt_b;
@@ -387,8 +387,8 @@ my$seq_length=length$sequence;
 
 
 
-sub OEratio{ # calculate OE ratio of a dinucleotide for given sequence 
-	
+sub OEratio{ # calculate OE ratio of a dinucleotide for given sequence
+
 	my$sequence=shift;
 	my$basepair=shift;
 	#my$filename=shift;
@@ -396,7 +396,7 @@ sub OEratio{ # calculate OE ratio of a dinucleotide for given sequence
 	#print "\nprint from line 370:$sequence\n";
 	return(0) if $sequence=~/^\s*$/; # return zero if sequence is empty
 	return(0) if $basepair=~/^\s*$/; # return zero if basepair is empty
-	
+
 	my$pair_count=0;
 	my%bcount;
 	my%bfreq;
@@ -405,14 +405,14 @@ sub OEratio{ # calculate OE ratio of a dinucleotide for given sequence
 	$pair_count++ while $sequence=~/$basepair/gi;
 	#print "\nprint from line 374:$pair_count\n";
 	my$pair_freq = $pair_count/length$sequence;
-	
-	
+
+
 	print "\nObserved freq of pair $basepair is 0 for sequence:\n$sequence\n" if ($pair_freq<=0 && lc$opt_v eq 'yes');
 	return(0) if $pair_freq<=0;
 	#(my$b1,my$b2)=split("",$basepair);
-		
+
 	my@b=split("",$basepair);
-	
+
 	for(my$i=0;$i<scalar@b;$i++){
 		next if $b[$i]=~/^\s*$/;
 		$bcount{$b[$i]}++ while $sequence=~/$b[$i]/gi;
@@ -421,8 +421,8 @@ sub OEratio{ # calculate OE ratio of a dinucleotide for given sequence
 	}
 	print "\nExpected freq of pair $basepair is 0 for sequence:\n$sequence\n" if ($bfreq_all<=0 && lc$opt_v eq 'yes');
 	return(0) if $bfreq_all<=0;
-	
-	
+
+
 	my$OEratio=$pair_freq/$bfreq_all;
 	#print "OERatio:$OEratio\n";
 	return($OEratio);
@@ -430,8 +430,8 @@ sub OEratio{ # calculate OE ratio of a dinucleotide for given sequence
 
 
 
-sub base_frequency{ # o calculate frequency of 
-	
+sub base_frequency{ # o calculate frequency of
+
 	my$sequence=shift;
 	my$base=shift;
 	my$Anumber=0;
@@ -440,7 +440,7 @@ sub base_frequency{ # o calculate frequency of
 	return 0 if length$sequence==0;
 	my$frequency=$Anumber/length$sequence;
 	return $frequency;
-	
+
 }
 
 sub GC_content{
@@ -451,6 +451,6 @@ sub GC_content{
 }
 
 sub roundoff{
-	
-	
+
+
 }

@@ -1,12 +1,14 @@
 #/usr/bin/perl -w
 use strict;
 use Bio::Tools::GFF;
+use Bio::SeqIO;
 use Getopt::Long;
 
-our($range_start,$range_end,$gff_file,$ver,$help);
+our($range_start,$range_end,$gff_file,$ver,$help,$fasta);
 
 my$result=GetOptions(
   "gff=s"=>\$gff_file,
+  "fasta=s"=>\$fasta,
   "ver=i"=>\$ver,
   "start=i"=>\$range_start,
   "end=i"=>\$range_end,
@@ -14,10 +16,11 @@ my$result=GetOptions(
   );
 
 
-my$help="
+$help="
 
 perl $0 -options...
 -gff  gff file path.
+-fasta fasta file of sequences
 -ver  gff version[3]
 -start  start site on sequence.
 -end  end site on the sequence.
@@ -30,27 +33,20 @@ my @features_in_range = ( );
 
 
 my $gffio = Bio::Tools::GFF->new(-file => $gff_file, -gff_version => $ver);
+my$seq= Bio::SeqIO->new(-file=> $fasta, -format=>'fasta');
+my$count=0;
 
-while (my $feature = $gffio->next_feature()) {
 
-    ## What about features that are not contained within the coordinate range but
-    ## do overlap it?  Such features won't be caught by this check.
-    if (
-        ($feature->start() >= $range_start)
-        &&
-        ($feature->end()   <= $range_end)
-       ) {
+while (my $feat = $gffio->next_feature()) {
+  if ($feat->primary_tag eq 'cds') {
+    print join " ",$feat->start,$feat->end;
+  }
 
-        push @features_in_range, $feature;
 
-    }
 
+        $count++;
 }
 
-my $gff_out = Bio::Tools::GFF->new(-file => ">$gff_file.selected.gff3", -gff_version => $ver);
-foreach (@features_in_range){
-  $gff_out->write_feature($_);
-}
 
 
 

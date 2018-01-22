@@ -9,13 +9,13 @@ use Getopt::Std;
 # on both sides This option is optional                                                             #
 #                                                                                                   #
 # Author : Ratnesh Singh                                                                            #
-# version 2.0                                                                                       #
+# version 1.10                                                                                       #
 # contact for bugs: ratnesh@hawaii.edu                                                              #
 #####################################################################################################
 
-getopt('abcdefghijklmnoqrst');
+getopt('abcdefghijkmnoqrst');
 ## avialable characters:k l p u v w x y z
-our ( $opt_s, $opt_b, $opt_h, $opt_t, $opt_o, $opt_m, $opt_q, $opt_g, $opt_d, $opt_c, $opt_e, $opt_i,$opt_n,$opt_r,$opt_a,$opt_f,$opt_j,$opt_k,$opt_l );
+our ( $opt_s, $opt_b, $opt_h, $opt_t, $opt_o, $opt_m, $opt_q, $opt_g, $opt_d, $opt_c, $opt_e, $opt_i,$opt_n,$opt_r,$opt_a,$opt_f,$opt_j,$opt_k );
 our (%seq,@coords);
 
 # like the shell getopt, "d:" means d takes an argument
@@ -44,7 +44,6 @@ usage:\n use following options\n -m mode of input(auto or manual) [Defaulst is a
 -g use names till first space while searching. [use full length names while]
 -d use this delimiter to split sequence name and use column[-c] to find seq.
 -c column to match if using delimiter to split the sequence names.
--l what to extract?. query|subject [subject]
 \n\n\n usage for manual input mode:\n\n-s sequence file name containing all sequences
 -n sequence/contig name to extract from.
 -i start site to cut from
@@ -136,13 +135,13 @@ else                          { goto "MANUAL"; }
 AUTO: {
 
     open BLAST, "$opt_b" or die "cannot read blast file \n";
-
+    my$count=0;
     while (<BLAST>) {
         my $line = $_;
-
+        $count++;
         #	print "before line : $line\n";
-        if ( $line =~ /^\s+$/ ) { next; }
-        if ( $line =~ /query/i or /match/i or /score/ or /gap/ or /mismatch/ ) { next; }
+        if ( $line =~ /^\s+$/ ) { print "\nBLAST line:$count is empty. Skipping\n"; next; }
+        if ( $.==1 && $line =~ /query/i or /match/i or /score/ or /gap/ or /mismatch/ ) { print "\nBLAST line:$count is a header. Skipping\n"; next; }
 
         #	print "line: $line\n";
         my @line_info = split( /\t/, $line );
@@ -158,74 +157,34 @@ AUTO: {
         #	print "Extracting --> $subject: sstart: $sstart\t";
         my $subend = $line_info[9];
 
-        
-        #	print"subject:$subject\n";
-        my $qstart = $line_info[6];
-
-        #	print "Extracting --> $subject: sstart: $sstart\t";
-        my $qend = $line_info[7];        
- 
- 
- 
-        
-        
         #	print " subend:$subend\n";
 
         #adjustment for increase in length at both ends
 
-        my ( $start_s, $end_s, $strand_s );
+        my ( $start_s, $end_s, $strand );
 
-        if   ( $sstart > $subend ) { $end_s   = $sstart + $opt_h - 1; $start_s = $subend - $opt_t - 1; $strand_s = 'minus'; }
-        else                       { $start_s = $sstart - $opt_h - 1; $end_s   = $subend + $opt_t - 1; $strand_s = 'plus' }
+        if   ( $sstart > $subend ) { $end_s   = $sstart + $opt_h - 1; $start_s = $subend - $opt_t - 1; $strand = 'minus'; }
+        else                       { $start_s = $sstart - $opt_h - 1; $end_s   = $subend + $opt_t - 1; $strand = 'plus' }
 
-        
-        my ( $start_q, $end_q, $strand_q );
-
-        if   ( $qstart > $qend ) { $end_q   = $qstart + $opt_h - 1; $start_q = $qend - $opt_t - 1; $strand_q = 'minus'; }
-        else                       { $start_q = $qstart - $opt_h - 1; $end_q   = $qend + $opt_t - 1; $strand_q = 'plus' }     
-        
-        
-        
-        
         if ( $start_s < 0 ) { $start_s = 0; }
-        if ( $start_q < 0 ) { $start_q = 0; }
 
         # added to avoid negative values of start_s.
 
-        my $len_s = $end_s - $start_s + 1;
-        my $len_q = $end_q - $start_q + 1;
+        my $len = $end_s - $start_s + 1;
 
         #print "Extracting --> $subject: sstart: $start_s\t end: $end_s \t length : $len \n";
 
         #my ($new_header,$new_sequence)=extract_seq($query,$subject,$start_s,$end_s,$len,$opt_h,$opt_t,$strand);
         ##print OUT">$new_header.$line_info[0].$line_info[1].$line_info[2].$line_info[3].$line_info[4].$line_info[5].$line_info[6].$line_info[7].$line_info[8].$line_info[9] \n$new_sequence\n" if defined $new_sequence;
         #print OUT">$new_header\n$new_sequence\n" if defined $new_sequence;
-            my $name_header=$query;
-            my $extract_header=$subject;
-            my $start_f=$start_s;
-            my $end_f=$end_s;
-            my $len_f=$len_s;
-            my $strand_f=$strand_s;
-        
-        if (lc$opt_l =~ m/query/i) {
-                $name_header=$subject;
-                $extract_header=$query;
-                $start_f=$start_q;
-                $end_f=$end_q;
-                $len_f=$len_q;
-                $strand_f=$strand_q;
-        }
 
-        
-        
-        
-        if ( my ( $new_header, $new_sequence, $returnedlength ) = extract_seq( $name_header, $extract_header, $start_f, $end_f, $len_f, $opt_h, $opt_t, $strand_f ) ) {
+        if ( my ( $new_header, $new_sequence, $returnedlength ) = extract_seq( $query, $subject, $start_s, $end_s, $len, $opt_h, $opt_t, $strand ) ) {
 
 #print OUT">$new_header.$line_info[0].$line_info[1].$line_info[2].$line_info[3].$line_info[4].$line_info[5].$line_info[6].$line_info[7].$line_info[8].$line_info[9] \n$new_sequence\n" if defined $new_sequence;
             print OUT">$new_header\n$new_sequence\n" if defined $new_sequence;
 
             #print "Header:$new_header\nSequence:$new_sequence\n" if defined $new_sequence;
-            print "Extracted --> $extract_header: sstart: $start_f\t end: $end_f \t Expected length : $len_f\t Extracted length:$returnedlength \n";
+            print "Extracted --> $subject: sstart: $start_s\t end: $end_s \t Expected length : $len\t Extracted length:$returnedlength \n";
         }
         else {
 

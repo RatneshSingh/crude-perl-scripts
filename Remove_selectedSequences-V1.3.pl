@@ -6,11 +6,11 @@
 
 
 
-our($opt_s,$opt_l,$opt_m,$opt_d,$opt_c);
+our($opt_s,$opt_l,$opt_m,$opt_d,$opt_c,$opt_o,$opt_O);
 
 $opt_m='exact';
 $opt_c=1;
-getopt('slmdc');
+getopt('slmdcoO');
 
 my$usage="perl script -s sequence_file    -l exclusion_list    -m match_type
 
@@ -18,7 +18,8 @@ my$usage="perl script -s sequence_file    -l exclusion_list    -m match_type
 optional:
 -d	delimiter to split head and use column -c as sequence name.[space]
 -c	Use this column as sequence name after splitting on delimiter -d.[1]
-
+-o  Output file name to save removed sequences [sequence_file.removed.fasta,]
+-O  Output file name to save leftover sequences [sequence_file.included.fasta,]
 ";
 
 open(FASTAFILE,$opt_s) or die"Cannot find the file \n$usage";
@@ -26,8 +27,10 @@ open(LISTEXCLUDE,$opt_l) or die"Cannot find the file \n$usage";
 
 print "\n\nArguments provided:\n$opt_s\tAs Fasta file\n$opt_l\tAs Exclusion List\n";
 
-open(OUT2,">$opt_s.removed.fasta");
-open(OUT3,">$opt_s.include.fasta");
+my$out2=$opt_o?$opt_o:"$opt_s.removed.fasta"
+my$out3=$opt_O?$opt_O:"$opt_s.include.fasta"
+open(OUT2,">$out2");
+open(OUT3,">$out3");
 
 my (@exclusion_list,@header_list,%exclusion_list);
 #define record seperator ($/) as "\>"

@@ -26,7 +26,11 @@ Options:
 		'promoter': Extract promoter region of the genes in the list. The length will be specified by -us (upstream) or -ds (downstream) or both.
 		'extract_repeats': Extract repeat regions from genomic sequences using gff file from RepeatMasker.
 		'mask_repeats': Mask repeat region on the genomic sequences using gff file from RepeatMasker.
-		'gc_around_repeats': Calcuate GC content around repeat regions on genomic sequences using gff file from RepeatMasker.
+                'gc_around_repeats': Calcuate GC content around repeat regions on genomic sequences using gff file from RepeatMasker.
+		'intron-exon-gc':Calculate several statistics about GC content for exons-introns.following types of results will be saved in
+                        seperate files as well as one file containing all stat for further analysis.
+                        GC_each_introns, GC_each_exon, Len_each_intron, Len_each_exon, GC per 10% of length, GC per sliding window (sliding
+                        window is in %of length and not nt).
 -window  percent of CDS length to be used as sliding window for intron-exon-gc [10]
 -slide   percent of CDS length to be used as step size for sliding window in intron-exon-gc [5]
 -out|o		prefix for the output file name. Please dont add extension.
@@ -101,6 +105,7 @@ die "\n$usage\n" if $help;
 # correct for possible mispelling in function type.
 $opt_feature_type = 'exon'   if lc$opt_feature_type eq 'exons';
 $opt_feature_type = 'genbank' if lc$opt_feature_type eq 'genebank';
+$opt_feature_type = 'transcript' if lc$opt_feature_type eq 'transcripts';
 ##################################################################
 # check for genomic sequence file
 die "$usage\nPlease provide file containing genomic sequence with -s flag.\n" if !$opt_seqfile;
@@ -140,6 +145,9 @@ elsif ( !$opt_gene_list_file ) {
 #  get_pattern_from_gff: gets you the reference to hash containing lines matching pattern of gene name.
 #  get_gene_info: gets you the reference to hash containing information of asked gene.
 my$num_pattern=@pattern;
+
+#$num_pattern > 0 or die "\nNo element in the list of pattern to look for. Exiting.\n";
+
 my$num_done=0;
 
 if($opt_run_mode eq 'memory'){
@@ -148,13 +156,17 @@ if($opt_run_mode eq 'memory'){
 
 		get_gene_info($opt_GFF_file,$gene_name,$opt_run_mode); # gene info will be stored into global variable %Gene
 		 print "Read co-ordinates for $gene_name from gff file($num_done out of $num_pattern)\n";
+
 	}
 }
 else{
     print "\nReading all the elements in GFF file in memory....Please wait";
     get_gene_info($opt_GFF_file,'no need of any name',$opt_run_mode);
-    @pattern = keys %Gene ; #if ( !$opt_gene_list_file );
-    print ".........Done\n"}
+    @pattern = keys %Gene if ( !$opt_gene_list_file );
+    print ".........Done\n"
+}
+
+
 
 ##################################################################
 # Prepare files to save output
@@ -192,6 +204,7 @@ print $fh_lenperintron join "\t","GeneName","Len_each_introns";
 # set default values for pattern based on feature(-f) type, if user did not provide the value for pattern (-p).
 if(lc$opt_feature_type eq 'mask' && !$opt_feature_name){$opt_feature_name='mask'}
 elsif(lc$opt_feature_type eq 'gene' && !$opt_feature_name){$opt_feature_name='gene'}
+elsif(lc$opt_feature_type eq 'transcript' && !$opt_feature_name){$opt_feature_name='transcript'}
 elsif(lc$opt_feature_type eq 'mrna' && !$opt_feature_name){$opt_feature_name='mRNA'}
 elsif(lc$opt_feature_type eq 'cds' && !$opt_feature_name){$opt_feature_name='CDS'}
 elsif(lc$opt_feature_type eq 'exon' && !$opt_feature_name){$opt_feature_name='exon'}
@@ -212,7 +225,7 @@ foreach my$gene_name(@pattern){
 		print {$fh}">$gene_name Exon masked:$seqid$coords length:$seqlen \n$gene_seq\n" if $gene_seq ne "0";
 	}
 	# toextract the feature
-    elsif(lc$opt_feature_type eq 'gene'||lc$opt_feature_type eq 'mrna'||lc$opt_feature_type eq 'cds'||lc$opt_feature_type eq 'exon'){
+    elsif(lc$opt_feature_type eq 'gene'||lc$opt_feature_type eq 'mrna'||lc$opt_feature_type eq 'cds'||lc$opt_feature_type eq 'exon'||lc$opt_feature_type eq 'transcript'){
 		($gene_seq,$coords,$seqlen,$seqid)=get_seq($gene_name,'extract',$opt_feature_name);
 		print {$fh}">$gene_name $opt_feature_name:$seqid$coords length:$seqlen \n$gene_seq\n" if $gene_seq ne "0";
 
@@ -330,7 +343,7 @@ foreach my$gene_name(@pattern){
 	}
 
 	# or die
-	else{die "Type of function ($opt_feature_type) is not a valid function type.Please choose function type from\ngene\nCDS\nExon\nmRNA\nMask\nGenbank\ngc_around_repeats"}
+	else{die "Type of function ($opt_feature_type) is not a valid function type.Please choose function type from\ngene\nCDS\nExon\nmRNA\ntranscripts\nMask\nGenbank\ngc_around_repeats"}
 
 	if($gene_seq && $gene_seq eq "0" && $opt_feature_type ne 'gc_around_repeats'){print "No gene feature found for $gene_name\n"}
     #else{print "\nGen_sequence:$gene_seq\n" };
@@ -520,6 +533,8 @@ sub get_gene_info{
   else{
 		my$count;
         my$geneid;
+        my$ID;
+        my$parent;
 		while (<GFF>){
 
 
@@ -535,17 +550,35 @@ sub get_gene_info{
 			s/\s*$//g foreach($seqid,$source,$type,$start,$end,$score,$strand,$phase);
 			$type=~s/\s+//g;
 
-            $geneid=$1 if $attributes=~/ID=([^;]+)/ ;#&& (lc$type eq 'gene' || lc$type eq 'mrna');
-            $geneid=$1 if $attributes=~/Parent=([^;]+)/ ;#&& (lc$type eq 'gene' || lc$type eq 'mrna');
+            #$geneid=$1 if $attributes=~/ID=([^;]+)/ ;#&& (lc$type eq 'gene' || lc$type eq 'mrna');
+            #$geneid=$1 if $attributes=~/Parent=([^;]+)/ ;#&& (lc$type eq 'gene' || lc$type eq 'mrna');
+
+
+            if($attributes=~/Parent=([^;]+)/){
+                $parent=$1;
+                $geneid=$parent;
+            }
+
+            if($attributes=~/ID=([^;]+)/){
+                $ID=$1;
+                $geneid=$ID if (lc$type eq 'gene' || lc$type eq 'mrna' || lc$type eq 'transcript');
+            }
+
+
+
+
             $geneid=~s/^\s*|\s*$//g;
+            ## if element belongs to more than one parents, assign it to each parent
             my@parents=split /,/,$geneid;
-            foreach my$par(@parents){
-    			push(@{$Gene{$geneid}{$type}{'startend'}},$start,$end);
-    			push(@{$Gene{$geneid}{$type}{'line'}},$line);
-    			$Gene{$geneid}{$type}{'strand'}=$strand;
-    			$Gene{$geneid}{$type}{'chr'}=$seqid;
-    			$Gene{$geneid}{$type}{'gene_name'}=$geneid;
-    			$Gene{$geneid}{$type}{'attributes'}=join(" ",$attributes,@attributes) if ($type eq "mRNA");;
+            foreach my $par(@parents){
+                next if $par =~ /^\s*$/;
+    			push(@{$Gene{$par}{$type}{'startend'}},$start,$end);
+    			push(@{$Gene{$par}{$type}{'line'}},$line);
+    			$Gene{$par}{$type}{'strand'}=$strand;
+    			$Gene{$par}{$type}{'chr'}=$seqid;
+    			$Gene{$par}{$type}{'gene_name'}=$par;
+                $Gene{$par}{$type}{'parent'}=$parent;
+    			$Gene{$par}{$type}{'attributes'}=join(" ",$attributes,@attributes) if ($type eq "mRNA");;
             }
 			$count++;
 		}
@@ -574,21 +607,21 @@ sub get_gene_info{
 ##########################################################################################################
 sub get_seq{
 
-    my$gene_name=shift;
-	my$do_what=shift; # either 'mask' or 'extract'
-	my$feature=shift; # feature name
+    my $gene_name=shift;
+	my $do_what=shift; # either 'mask' or 'extract'
+	my $feature=shift; # feature name
 
 	chomp($gene_name,$do_what,$feature);
 
 
 		# get gene info from %Gene (passed as reference) from global variable
-        my$gene_seq=();
-        my@exons;
-        my$gene_start=${$Gene{$gene_name}{$feature}{'startend'}}[0];
-        my$gene_end=${$Gene{$gene_name}{$feature}{'startend'}}[-1];
-        my$seq_id=$Gene{$gene_name}{$feature}{'chr'};
-        my$gene_strand=$Gene{$gene_name}{$feature}{'strand'};
-        my$CDS_coord='(';
+        my $gene_seq=();
+        my @exons;
+        my $gene_start=${$Gene{$gene_name}{$feature}{'startend'}}[0];
+        my $gene_end=${$Gene{$gene_name}{$feature}{'startend'}}[-1];
+        my $seq_id=$Gene{$gene_name}{$feature}{'chr'};
+        my $gene_strand=$Gene{$gene_name}{$feature}{'strand'};
+        my $CDS_coord='(';
 
 	if(!$gene_start || $gene_start<=0){return 0;} # return zero if start position of the feature is not found.
 
@@ -1122,6 +1155,8 @@ sub get_introns{
 
 
 }
+
+
 
 ##############################################################################################
 # Return summary of GC content around repeats
